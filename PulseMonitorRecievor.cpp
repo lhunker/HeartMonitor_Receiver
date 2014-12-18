@@ -1,15 +1,22 @@
-#include "Energia.h"
+/*
+ * PulseMonitorReciever
+ * Author: Lukas Hunker
+ * The reciever module for our heartrate sensor
+ * Recieves signal over SPI and Detects an abnormality
+ * Uses Energia libraries and Enrf24 Library
+ * SPI Library modified to use USCI A instead of USCI B
+*/
 
-String dump_radio_status_to_serialport(uint8_t);
+
 void setup();
 void loop();
 
-
+#include "Energia.h"
 #include <Enrf24.h>
 #include <nRF24L01.h>
 #include <SPI.h>
 
-//TODO Set these params
+//Params (these are set for demo purposes)
 #define pktdiff 10000
 #define errorlow 20
 #define errorhigh 200
@@ -20,15 +27,12 @@ void loop();
 #define buzzer P2_4
 
 //Globals
-volatile long previouspkt = 0;
+volatile long previouspkt = 0;	//time the last packet was recived in miliseconds
 
 Enrf24 radio(P2_1, P2_0, P1_3);
-//Enrf24 radio(P2_0, P2_1, P2_2);
 const uint8_t rxaddr[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x01 };
 
 void setup() {
-//	Serial.begin(9600);
-
 	SPI.begin();
 	SPI.setDataMode(SPI_MODE0);
 	SPI.setBitOrder(MSBFIRST);
@@ -47,24 +51,23 @@ void setup() {
 	digitalWrite(buzzer, LOW);
 
 	radio.enableRX();  // Start listening
-//	Serial.println("Started Up");
 }
 
 void loop() {
 	char inbuf[33];
 
-	  dump_radio_status_to_serialport(radio.radioState());
+	  //Wait for a packet
 	  while (!radio.available(true)){
 	  	long currenttime = millis();
+	  	//if packet not recieved recently - error
 	  	if (currenttime - previouspkt >= pktdiff){
 	  		digitalWrite(errorLED, HIGH);
 	  	}
 	  }
-//	  Serial.println(inbuf);
-	  previouspkt = millis();
+	  previouspkt = millis();	//set last pkt recieved time
+
+	  //concert input to an int
 	  if (radio.read(inbuf)) {
-//	    Serial.print("Received packet: ");
-//	    Serial.println(inbuf);
 	    int bpm = (int)inbuf[0] -'0';
 	    bpm *= 10;
 	    bpm += (int)inbuf[1] - '0';
@@ -73,6 +76,7 @@ void loop() {
 	    	bpm += (int)inbuf[2] - '0';
 	    }
 
+	    //Set LEDs and Buzzer
 	    digitalWrite(errorLED, LOW);
 	    if (bpm < errorlow || bpm > errorhigh){
 	    	digitalWrite(errorLED, HIGH);
@@ -87,35 +91,6 @@ void loop() {
 	    	digitalWrite(buzzer, LOW);
 	    }
 	  }
-}
-
-String dump_radio_status_to_serialport(uint8_t status)
-{
-//	Serial.print("Enrf24 radio transceiver status: ");
-	switch (status) {
-	case ENRF24_STATE_NOTPRESENT:
-		return "NO TRANSCEIVER PRESENT";
-		break;
-
-	case ENRF24_STATE_DEEPSLEEP:
-		return "DEEP SLEEP <1uA power consumption";
-		break;
-
-	case ENRF24_STATE_IDLE:
-		return "IDLE module powered up w/ oscillators running";
-		break;
-
-	case ENRF24_STATE_PTX:
-		return "Actively Transmitting";
-		break;
-
-	case ENRF24_STATE_PRX:
-		return "Receive Mode";
-		break;
-
-	default:
-		return "UNKNOWN STATUS CODE";
-	}
 }
 
 
